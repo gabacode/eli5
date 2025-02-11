@@ -1,3 +1,6 @@
 venv
 .idea
 *.wav
+node_modules
+*.pyc
+__pycache__
