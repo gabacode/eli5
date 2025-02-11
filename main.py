@@ -103,15 +103,11 @@ class Application:
                 time.sleep(1)
         logging.debug("play_phrases thread exiting")
 
-    def create_worker_threads(self):
-        """Create and start worker threads."""
-        self.threads = [
-            threading.Thread(target=self.rec_phrases, daemon=True, name="RecorderThread"),
-            threading.Thread(target=self.play_phrases, daemon=True, name="PlayerThread")
-        ]
-        for thread in self.threads:
-            thread.start()
-            logging.info(f"Started thread: {thread.name}")
+    def create_rec_thread(self):
+        threading.Thread(target=self.rec_phrases, daemon=True, name="RecorderThread").start()
+
+    def create_play_thread(self):
+        threading.Thread(target=self.play_phrases, daemon=True, name="PlayerThread").start()
 
     def shutdown(self):
         """Gracefully shutdown the application."""
@@ -136,7 +132,8 @@ class Application:
             sections = self.text_processor.split_into_sections(full_text)
             logging.info(f"Found {len(sections)} major sections")
 
-            self.create_worker_threads()
+            self.create_rec_thread()
+            self.create_play_thread()
 
             for i, section in enumerate(sections, 1):
                 logging.debug(f"Processing section {i}/{len(sections)}")
