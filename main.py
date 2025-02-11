@@ -1,8 +1,10 @@
 import hashlib
+import io
 import logging
+import re
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Queue, Full, Empty
@@ -25,7 +27,6 @@ logging.basicConfig(
 
 @dataclass
 class Config:
-    min_section_length: int = 1000
     thread_timeout: int = 10
     audio_dir: Path = Path("audio_cache")
     ollama_host: str = "http://localhost:11434"
@@ -33,6 +34,12 @@ class Config:
     audio_sample_rate: int = 44100
     model_name: str = "tts_models/multilingual/multi-dataset/xtts_v2"
     voice_file: str = "voice.wav"
+
+
+@dataclass
+class AudioTextPair:
+    text: str
+    audio_path: Path
 
 
 class AudioProcessingError(Exception):
@@ -135,41 +142,68 @@ class TextProcessor:
         self.config = config
         self.nlp = spacy.load('en_core_web_sm')
 
+    def destop_words(self, text: str) -> str:
+        """Remove stopwords from a list of tokens."""
+        return ' '.join(token.text for token in self.nlp(text) if not token.is_stop)
+
     def split_into_sections(self, text: str) -> List[str]:
         """Split text into meaningful sections based on paragraphs."""
         if not text:
             logging.warning("Received empty text to split into sections")
             return []
 
-        sections = []
-        current_section = []
+        TARGET_WORDS = 250
+        MIN_SECTION_LENGTH = 50
 
         try:
-            for paragraph in text.split('\n\n'):
-                if not paragraph or not paragraph.strip():
-                    continue
+            text = re.sub(r'\s+', ' ', text).strip()
+            doc = self.nlp(text)
 
-                current_section.append(paragraph.strip())
-                current_text = '\n\n'.join(current_section)
+            sections = []
+            current_section = []
+            current_word_count = 0
 
-                if len(current_text) >= self.config.min_section_length:
-                    sections.append(current_text)
-                    logging.debug(f"Section created with length {len(current_text)}")
+            for sent in doc.sents:
+                sentence_words = len([token for token in sent if not token.is_space])
+
+                if current_word_count + sentence_words > TARGET_WORDS and current_section:
+                    section_text = ' '.join(current_section).strip()
+                    if section_text:
+                        sections.append(section_text)
+                        logging.debug(f"Created section with {current_word_count} words")
                     current_section = []
+                    current_word_count = 0
+
+                current_section.append(sent.text)
+                current_word_count += sentence_words
+
+                if current_word_count > TARGET_WORDS * 1.5 and len(current_section) == 1:
+                    section_text = ' '.join(current_section).strip()
+                    if section_text:
+                        sections.append(section_text)
+                        logging.debug(f"Created oversized section with {current_word_count} words")
+                    current_section = []
+                    current_word_count = 0
 
             if current_section:
-                final_text = '\n\n'.join(current_section)
-                if len(final_text) >= self.config.min_section_length // 2:
-                    sections.append(final_text)
-                    logging.debug(f"Final section created with length {len(final_text)}")
+                remaining_text = ' '.join(current_section).strip()
+                if remaining_text:
+                    if (current_word_count < MIN_SECTION_LENGTH and sections
+                            and len(sections[-1].split()) + current_word_count <= TARGET_WORDS * 1.2):
+                        sections[-1] = f"{sections[-1]} {remaining_text}"
+                        logging.debug(f"Merged short final section with previous section")
+                    else:
+                        sections.append(remaining_text)
+                        logging.debug(f"Created final section with {current_word_count} words")
+
+            if not sections:
+                logging.warning("No sections were created from the input text")
+
+            return sections
+
         except Exception as e:
             logging.error(f"Error in split_into_sections: {e}", exc_info=True)
-            raise
-
-        if not sections:
-            logging.warning("No sections were created from the input text")
-
-        return sections
+            raise AudioProcessingError(f"Failed to split text into sections: {e}")
 
     def extract_sentences(self, text: str) -> List[str]:
         """Extract complete sentences from text."""
@@ -193,6 +227,7 @@ class TTSEngine:
     def __init__(self, config: Config):
         self.config = config
         self.tts = None
+        self.stdout_capture = io.StringIO()
         self.initialize_tts()
 
     def initialize_tts(self):
@@ -200,8 +235,9 @@ class TTSEngine:
         device = "cuda" if torch.cuda.is_available() else "cpu"
         with torch_load_context(weights_only=False):
             try:
-                self.tts = TTS(self.config.model_name).to(device)
-                logging.info(f"TTS engine initialized on {device}")
+                with redirect_stdout(self.stdout_capture):
+                    self.tts = TTS(self.config.model_name).to(device)
+                    logging.info(f"TTS engine initialized on {device}")
             except Exception as e:
                 logging.error(f"Failed to initialize TTS: {e}", exc_info=True)
                 raise
@@ -210,13 +246,15 @@ class TTSEngine:
         """Generate speech from text and save to file."""
         try:
             logging.debug(f"Generating speech for text: {text}")
-            self.tts.tts_to_file(
-                text=text,
-                speaker_wav=self.config.voice_file,
-                language="en",
-                file_path=str(output_path)
-            )
-            logging.info(f"Speech generated and saved to: {output_path}")
+            with redirect_stdout(self.stdout_capture):
+                self.tts.tts_to_file(
+                    text=text,
+                    speaker_wav=self.config.voice_file,
+                    language="en",
+                    file_path=str(output_path),
+                    split_sentences=False,
+                )
+                logging.debug(f"Speech generated and saved to: {output_path}")
         except Exception as e:
             logging.error(f"Speech generation failed: {e}", exc_info=True)
             raise AudioProcessingError(f"Failed to generate speech: {e}")
@@ -231,9 +269,9 @@ class OllamaClient:
             headers={'x-some-header': 'some-value'}
         )
 
-    def get_summary(self, text: str, model: str) -> str:
+    def get_summary(self, last_section: str, text: str, model: str) -> str:
         """Get an engaging summary from Ollama."""
-        prompt = f"""
+        base_prompt = f"""
         Imagine you're explaining this content to an interested friend who's smart but not an expert in the field. Create an engaging summary that:
         1. Sets the scene and introduces the main ideas like you're telling a story
         2. Explains key concepts using relatable analogies or examples where appropriate
@@ -242,10 +280,19 @@ class OllamaClient:
         5. Wraps up by emphasizing why this matters or what we learned
 
         Keep the tone conversational but informative. Aim for about 200-300 words.
-
-        Text to transform into a story:
-        {text}
         """
+        if last_section:
+            context_prompt = f"""
+            Important: This is a continuation of a longer text. Here's what was covered in the previous section:
+            {last_section}
+            Please make your summary flow naturally from the previous content, to maintain narrative continuity,
+            so you won't need to repeat the previous information, without mentioning it explicitly.
+            Text to transform into the next part of the story:
+            {text}
+            """
+            prompt = base_prompt + context_prompt
+        else:
+            prompt = base_prompt + f"\nText to transform into a story:\n{text}"
 
         try:
             logging.debug(f"Requesting summary from Ollama for text (len={len(text)})")
@@ -269,7 +316,7 @@ class AudioPlayer:
 
     def play_audio(self, audio_file: Path):
         """Play audio file with proper resource management."""
-        logging.info(f"Starting playback for: {audio_file}")
+        logging.debug(f"Starting playback for: {audio_file}")
         try:
             with sf.SoundFile(str(audio_file)) as f:
                 with sd.OutputStream(
@@ -288,7 +335,7 @@ class AudioPlayer:
                             break
                         stream.write(data)
 
-            logging.info(f"Finished playback for: {audio_file}")
+            logging.debug(f"Finished playback for: {audio_file}")
             self.file_manager.cleanup_file(audio_file)
         except Exception as e:
             logging.error(f"Audio playback failed: {e}", exc_info=True)
@@ -339,18 +386,18 @@ class Application:
         """Generate a hash for a given section text."""
         return hashlib.sha256(section.encode('utf-8')).hexdigest()
 
-    def process_section(self, section: str, model: str):
+    def process_section(self, last_section: str, section: str, model: str):
         """Process a single section of text."""
         section_hash = self._hash_section(section)
         if section_hash in self.processed_sections:
             logging.info("Section already processed, skipping.")
             return
 
-        logging.info(f"Processing section (length={len(section)}) with hash {section_hash}")
+        logging.debug(f"Processing section (length={len(section)}) with hash {section_hash}")
         try:
-            summary = self.ollama_client.get_summary(section, model)
+            summary = self.ollama_client.get_summary(last_section, section, model)
             sentences = self.text_processor.extract_sentences(summary)
-            logging.info(f"Generated summary sentences: {sentences}")
+            logging.debug(f"Generated summary sentences: {sentences}")
 
             for sentence in sentences:
                 if self.shutdown_event.is_set():
@@ -369,7 +416,7 @@ class Application:
 
     def rec_phrases(self):
         """Convert text to speech and add to playback queue."""
-        logging.info("rec_phrases thread started")
+        logging.debug("rec_phrases thread started")
         while not self.shutdown_event.is_set():
             try:
                 phrase = self.audio_queue.get()
@@ -377,26 +424,28 @@ class Application:
                     logging.debug(f"Converting phrase to speech: {phrase}")
                     with self.file_manager.temporary_audio_file() as temp_file:
                         self.tts_engine.generate_speech(phrase, temp_file)
-                        if self.playback_queue.put(temp_file):
-                            logging.debug(f"Enqueued audio file for playback: {temp_file}")
+                        audio_text_pair = AudioTextPair(text=phrase, audio_path=temp_file)
+                        if self.playback_queue.put(audio_text_pair):
+                            logging.debug(f"Enqueued audio-text pair for playback: {audio_text_pair}")
             except Exception as e:
                 logging.error(f"Error in speech generation: {e}", exc_info=True)
                 time.sleep(1)
-        logging.info("rec_phrases thread exiting")
+        logging.debug("rec_phrases thread exiting")
 
     def play_phrases(self):
-        """Play audio files from the playback queue."""
-        logging.info("play_phrases thread started")
+        """Play audio files from the playback queue and display corresponding text."""
+        logging.debug("play_phrases thread started")
         while not self.shutdown_event.is_set():
             try:
-                audio_file = self.playback_queue.get()
-                if audio_file and audio_file.exists():
-                    logging.debug(f"About to play audio file: {audio_file}")
-                    self.audio_player.play_audio(audio_file)
+                audio_text_pair = self.playback_queue.get()
+                if audio_text_pair and audio_text_pair.audio_path.exists():
+                    logging.debug(f"About to play audio file: {audio_text_pair.audio_path}")
+                    logging.info(audio_text_pair.text)
+                    self.audio_player.play_audio(audio_text_pair.audio_path)
             except Exception as e:
                 logging.error(f"Error in audio playback: {e}", exc_info=True)
                 time.sleep(1)
-        logging.info("play_phrases thread exiting")
+        logging.debug("play_phrases thread exiting")
 
     def create_worker_threads(self):
         """Create and start worker threads."""
@@ -434,13 +483,14 @@ class Application:
             self.create_worker_threads()
 
             for i, section in enumerate(sections, 1):
-                logging.info(f"Processing section {i}/{len(sections)}")
-                self.process_section(section, model)
+                logging.debug(f"Processing section {i}/{len(sections)}")
+                last_section = self.text_processor.destop_words(sections[i - 2]) if i > 1 else ""
+                self.process_section(last_section, section, model)
                 if i < len(sections):
                     time.sleep(1)
 
             while not self.audio_queue.empty() or not self.playback_queue.empty() or self.audio_player.is_playing:
-                logging.info("Waiting for audio processing to complete...")
+                logging.debug("Waiting for audio processing to complete...")
                 time.sleep(1)
 
         except KeyboardInterrupt:
