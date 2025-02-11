@@ -30,6 +30,7 @@ class Config:
     thread_timeout: int = 10
     audio_dir: Path = Path("audio_cache")
     ollama_host: str = "http://localhost:11434"
+    ollama_llm: str = "gemma2:latest"
     max_queue_size: int = 1000
     audio_sample_rate: int = 44100
     model_name: str = "tts_models/multilingual/multi-dataset/xtts_v2"
@@ -268,8 +269,9 @@ class OllamaClient:
             host=config.ollama_host,
             headers={'x-some-header': 'some-value'}
         )
+        self.model = config.ollama_llm
 
-    def get_summary(self, last_section: str, text: str, model: str) -> str:
+    def get_summary(self, last_section: str, text: str) -> str:
         """Get an engaging summary from Ollama."""
         base_prompt = f"""
         Imagine you're explaining this content to an interested friend who's smart but not an expert in the field. Create an engaging summary that:
@@ -296,7 +298,7 @@ class OllamaClient:
 
         try:
             logging.debug(f"Requesting summary from Ollama for text (len={len(text)})")
-            response = self.client.generate(model=model, prompt=prompt)
+            response = self.client.generate(model=self.model, prompt=prompt)
             summary = response["response"] if response else "Summary unavailable."
             logging.debug("Summary received from Ollama")
             return summary
@@ -386,7 +388,7 @@ class Application:
         """Generate a hash for a given section text."""
         return hashlib.sha256(section.encode('utf-8')).hexdigest()
 
-    def process_section(self, last_section: str, section: str, model: str):
+    def process_section(self, last_section: str, section: str):
         """Process a single section of text."""
         section_hash = self._hash_section(section)
         if section_hash in self.processed_sections:
@@ -395,7 +397,7 @@ class Application:
 
         logging.debug(f"Processing section (length={len(section)}) with hash {section_hash}")
         try:
-            summary = self.ollama_client.get_summary(last_section, section, model)
+            summary = self.ollama_client.get_summary(last_section, section)
             sentences = self.text_processor.extract_sentences(summary)
             logging.debug(f"Generated summary sentences: {sentences}")
 
@@ -471,7 +473,7 @@ class Application:
         self.file_manager.cleanup()
         logging.info("Shutdown complete!")
 
-    def run(self, file_path: str, model: str):
+    def run(self, file_path: str):
         """Main function to process and read the text."""
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
@@ -485,7 +487,7 @@ class Application:
             for i, section in enumerate(sections, 1):
                 logging.debug(f"Processing section {i}/{len(sections)}")
                 last_section = self.text_processor.destop_words(sections[i - 2]) if i > 1 else ""
-                self.process_section(last_section, section, model)
+                self.process_section(last_section, section)
                 if i < len(sections):
                     time.sleep(1)
 
@@ -503,4 +505,4 @@ class Application:
 
 if __name__ == '__main__':
     app = Application()
-    app.run("text.txt", model="gemma2:latest")
+    app.run("text.txt")
