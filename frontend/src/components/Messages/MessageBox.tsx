@@ -12,7 +12,7 @@ export const MessageBox = () => {
   };
 
   return (
-    <div className="p-3 bg-light rounded d-flex flex-column overflow-auto h-256">
+    <div className="p-3 bg-light rounded d-flex flex-column overflow-auto h-256 border">
       {[...state.messages]
         .slice(0, state.messageIdx + 1)
         .reverse()
