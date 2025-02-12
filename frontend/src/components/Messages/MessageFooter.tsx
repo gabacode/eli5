@@ -2,10 +2,10 @@ import { useGlobalState } from "../../state/useGlobalState";
 
 interface IMessageFooter {
   audioQueue: ArrayBuffer[];
-  skipCurrent: () => void;
+  skipAudio: () => void;
 }
 
-export const MessageFooter = ({ audioQueue, skipCurrent }: IMessageFooter) => {
+export const MessageFooter = ({ audioQueue, skipAudio }: IMessageFooter) => {
   const { state } = useGlobalState();
 
   const renderStatue = () => {
@@ -27,7 +27,7 @@ export const MessageFooter = ({ audioQueue, skipCurrent }: IMessageFooter) => {
         {(state.isPlaying || audioQueue.length > 0) && (
           <button
             className="btn btn-sm btn-outline-secondary"
-            onClick={skipCurrent}
+            onClick={skipAudio}
           >
             Skip
           </button>

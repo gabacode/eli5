@@ -1,18 +1,17 @@
 import { useGlobalState } from "../../state/useGlobalState";
 
 interface IMessageBox {
-  messages: { text: string; played: boolean }[];
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export const MessageBox = ({ messages, messagesEndRef }: IMessageBox) => {
+export const MessageBox = ({ messagesEndRef }: IMessageBox) => {
   const { state } = useGlobalState();
   return (
     <div
       className="p-3 bg-light rounded"
       style={{ maxHeight: "400px", overflowY: "auto" }}
     >
-      {messages
+      {state.messages
         .filter((_, idx) => idx <= state.messageIdx)
         .map((msg, idx) => (
           <div

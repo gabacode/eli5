@@ -3,10 +3,9 @@ import { useGlobalState } from "../state/useGlobalState";
 
 interface UseAudioProps {
   wsRef: React.RefObject<WebSocket | null>;
-  onEnd: () => void;
 }
 
-export const useAudio = ({ wsRef, onEnd }: UseAudioProps) => {
+export const useAudio = ({ wsRef }: UseAudioProps) => {
   const { state, dispatch } = useGlobalState();
   const [audioQueue, setAudioQueue] = useState<ArrayBuffer[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -22,7 +21,12 @@ export const useAudio = ({ wsRef, onEnd }: UseAudioProps) => {
     };
   }, [wsRef]);
 
-  const skipCurrent = useCallback(() => {
+  const onEnd = useCallback(() => {
+    dispatch({ type: "MARK_PLAYED", index: state.messageIdx });
+    dispatch({ type: "SET_MSG_IDX", index: state.messageIdx + 1 });
+  }, [dispatch, state.messageIdx]);
+
+  const skipAudio = useCallback(() => {
     if (!currentSourceRef.current) return;
     currentSourceRef.current.onended = null;
     try {
@@ -41,7 +45,7 @@ export const useAudio = ({ wsRef, onEnd }: UseAudioProps) => {
     dispatch({ type: "SET_IS_PLAYING", isPlaying: false });
   }, [dispatch, onEnd]);
 
-  const playNextAudio = useCallback(async () => {
+  const playNext = useCallback(async () => {
     if (audioQueue.length === 0 || state.isPlaying) return;
 
     try {
@@ -90,8 +94,8 @@ export const useAudio = ({ wsRef, onEnd }: UseAudioProps) => {
 
   return {
     audioQueue,
-    playNextAudio,
-    skipCurrent,
     setAudioQueue,
+    playNext,
+    skipAudio,
   };
 };

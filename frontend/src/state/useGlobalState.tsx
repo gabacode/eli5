@@ -6,11 +6,15 @@ type State = {
   messages: Message[];
   messageIdx: number;
   isPlaying: boolean;
+  audioQueue: ArrayBuffer[];
 };
 
 type StateAction =
   | { type: "SET_STATUS"; status: Status }
   | { type: "SET_MESSAGES"; messages: Message[] }
+  | { type: "SET_AUDIO_QUEUE"; queue: ArrayBuffer[] }
+  | { type: "MARK_PLAYED"; index: number }
+  | { type: "ADD_MESSAGE"; message: Message }
   | { type: "SET_MSG_IDX"; index: number }
   | { type: "SET_IS_PLAYING"; isPlaying: boolean };
 
@@ -19,6 +23,7 @@ const initialState: State = {
   messages: [],
   messageIdx: 0,
   isPlaying: false,
+  audioQueue: [],
 };
 
 const reducer = (state: State, action: StateAction): State => {
@@ -27,6 +32,17 @@ const reducer = (state: State, action: StateAction): State => {
       return { ...state, status: action.status };
     case "SET_MESSAGES":
       return { ...state, messages: action.messages };
+    case "SET_AUDIO_QUEUE":
+      return { ...state, audioQueue: action.queue };
+    case "ADD_MESSAGE":
+      return { ...state, messages: [...state.messages, action.message] };
+    case "MARK_PLAYED":
+      return {
+        ...state,
+        messages: state.messages.map((msg, idx) =>
+          idx === action.index ? { ...msg, played: true } : msg
+        ),
+      };
     case "SET_MSG_IDX":
       return { ...state, messageIdx: action.index };
     case "SET_IS_PLAYING":

@@ -1,11 +1,35 @@
+import { ChangeEvent } from "react";
 import { useGlobalState } from "../state/useGlobalState";
 
 interface FileBoxProps {
-  handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  wsRef: React.RefObject<WebSocket | null>;
+  onStart: () => void;
 }
 
-export const FileBox = ({ handleFileUpload }: FileBoxProps) => {
-  const { state } = useGlobalState();
+export const FileBox = ({ wsRef, onStart }: FileBoxProps) => {
+  const { state, dispatch } = useGlobalState();
+
+  const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      onStart();
+      const content = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = (e) => reject(e);
+        reader.readAsText(file);
+      });
+      while (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      wsRef.current.send(JSON.stringify({ content }));
+      dispatch({ type: "SET_STATUS", status: "processing" });
+    } catch (error) {
+      console.error("Error handling file:", error);
+      dispatch({ type: "SET_STATUS", status: "idle" });
+    }
+  };
 
   return (
     <div className="mb-4">
