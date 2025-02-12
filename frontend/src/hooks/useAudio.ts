@@ -1,13 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useGlobalState } from "../state/useGlobalState";
 
 interface UseAudioProps {
   wsRef: React.RefObject<WebSocket | null>;
   onEnd: () => void;
-  onError: () => void;
 }
 
-export const useAudio = ({ wsRef, onEnd, onError }: UseAudioProps) => {
-  const [isPlaying, setIsPlaying] = useState(false);
+export const useAudio = ({ wsRef, onEnd }: UseAudioProps) => {
+  const { state, dispatch } = useGlobalState();
   const [audioQueue, setAudioQueue] = useState<ArrayBuffer[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -38,14 +38,14 @@ export const useAudio = ({ wsRef, onEnd, onError }: UseAudioProps) => {
     currentSourceRef.current = null;
     onEnd();
     setAudioQueue((prev) => prev.slice(1));
-    setIsPlaying(false);
-  }, [onEnd]);
+    dispatch({ type: "SET_IS_PLAYING", isPlaying: false });
+  }, [dispatch, onEnd]);
 
   const playNextAudio = useCallback(async () => {
-    if (audioQueue.length === 0 || isPlaying) return;
+    if (audioQueue.length === 0 || state.isPlaying) return;
 
     try {
-      setIsPlaying(true);
+      dispatch({ type: "SET_IS_PLAYING", isPlaying: true });
       const audioData = audioQueue[0];
 
       if (!audioContextRef.current) {
@@ -72,7 +72,7 @@ export const useAudio = ({ wsRef, onEnd, onError }: UseAudioProps) => {
 
       source.onended = () => {
         source.disconnect();
-        setIsPlaying(false);
+        dispatch({ type: "SET_IS_PLAYING", isPlaying: false });
         setAudioQueue((prev) => prev.slice(1));
         onEnd();
         currentSourceRef.current = null;
@@ -81,16 +81,15 @@ export const useAudio = ({ wsRef, onEnd, onError }: UseAudioProps) => {
       source.start(0);
     } catch (error) {
       console.error("Error playing audio:", error);
-      setIsPlaying(false);
+      dispatch({ type: "SET_IS_PLAYING", isPlaying: false });
       setAudioQueue((prev) => prev.slice(1));
-      onError();
+      dispatch({ type: "SET_MSG_IDX", index: state.messageIdx + 1 });
       currentSourceRef.current = null;
     }
-  }, [audioQueue, isPlaying, onEnd, onError]);
+  }, [audioQueue, dispatch, onEnd, state.isPlaying, state.messageIdx]);
 
   return {
     audioQueue,
-    isPlaying,
     playNextAudio,
     skipCurrent,
     setAudioQueue,

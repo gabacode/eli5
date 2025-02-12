@@ -1,11 +1,12 @@
-import { Status } from "../utils/types";
+import { useGlobalState } from "../state/useGlobalState";
 
 interface FileBoxProps {
-  status: Status;
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-export const FileBox = ({ status, handleFileUpload }: FileBoxProps) => {
+export const FileBox = ({ handleFileUpload }: FileBoxProps) => {
+  const { state } = useGlobalState();
+
   return (
     <div className="mb-4">
       <div className="text-center p-4 border rounded bg-light">
@@ -19,12 +20,12 @@ export const FileBox = ({ status, handleFileUpload }: FileBoxProps) => {
           accept=".txt"
           onChange={handleFileUpload}
           id="fileInput"
-          disabled={status === "processing"}
+          disabled={state.status === "processing"}
         />
         <label
           htmlFor="fileInput"
           className={`btn btn-primary ${
-            status === "processing" ? "disabled" : ""
+            state.status === "processing" ? "disabled" : ""
           }`}
         >
           Choose File

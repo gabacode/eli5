@@ -1,19 +1,15 @@
 import { useState } from "react";
-import { Message, Status } from "../utils/types";
+import { Message } from "../utils/types";
+import { useGlobalState } from "../state/useGlobalState";
 
 interface IUseWs {
   wsRef: React.RefObject<WebSocket | null>;
-  setStatus: React.Dispatch<React.SetStateAction<Status>>;
   setAudioQueue: React.Dispatch<React.SetStateAction<ArrayBuffer[]>>;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 }
 
-export const useWebSocket = ({
-  wsRef,
-  setStatus,
-  setAudioQueue,
-  setMessages,
-}: IUseWs) => {
+export const useWebSocket = ({ wsRef, setAudioQueue, setMessages }: IUseWs) => {
+  const { state, dispatch } = useGlobalState();
   const [isConnected, setIsConnected] = useState(false);
 
   const base64ToBuffer = (base64: string): ArrayBuffer => {
@@ -39,12 +35,18 @@ export const useWebSocket = ({
     ws.onclose = () => {
       console.log("WebSocket disconnected");
       setIsConnected(false);
-      setStatus((prev) => (prev === "processing" ? "completed" : "idle"));
+      dispatch({
+        type: "SET_STATUS",
+        status: state.status === "processing" ? "completed" : "idle",
+      });
     };
 
     ws.onerror = (error: Event) => {
       console.error("WebSocket error:", error);
-      setStatus("idle");
+      dispatch({
+        type: "SET_STATUS",
+        status: "idle",
+      });
     };
 
     ws.onmessage = async (event: MessageEvent) => {
@@ -56,7 +58,10 @@ export const useWebSocket = ({
         setAudioQueue((prev) => [...prev, audioBuffer]);
       } else if (data.type === "error") {
         console.error("Server error:", data.content);
-        setStatus("idle");
+        dispatch({
+          type: "SET_STATUS",
+          status: "idle",
+        });
       }
     };
   };
