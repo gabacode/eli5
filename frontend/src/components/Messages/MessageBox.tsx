@@ -1,11 +1,24 @@
+import { useEffect, useRef } from "react";
 import { useGlobalState } from "../../state/useGlobalState";
+import { Message } from "../../utils/types";
 
-interface IMessageBox {
-  messagesEndRef: React.RefObject<HTMLDivElement | null>;
-}
-
-export const MessageBox = ({ messagesEndRef }: IMessageBox) => {
+export const MessageBox = () => {
   const { state } = useGlobalState();
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const getMessageStyle = (msg: Message, idx: number) => {
+    if (idx === state.messageIdx && state.isPlaying) {
+      return "bg-primary text-white";
+    }
+    return msg.played ? "bg-white border opacity-75" : "bg-white border";
+  };
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [state.messageIdx, state.messages]);
+
   return (
     <div
       className="p-3 bg-light rounded"
@@ -16,13 +29,7 @@ export const MessageBox = ({ messagesEndRef }: IMessageBox) => {
         .map((msg, idx) => (
           <div
             key={idx}
-            className={`p-2 mb-2 rounded ${
-              idx === state.messageIdx && state.isPlaying
-                ? "bg-primary text-white"
-                : msg.played
-                ? "bg-white border opacity-75"
-                : "bg-white border"
-            }`}
+            className={`p-2 mb-2 rounded ${getMessageStyle(msg, idx)}`}
           >
             {msg.text}
           </div>

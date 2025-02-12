@@ -3,10 +3,9 @@ import { useGlobalState } from "../state/useGlobalState";
 
 interface IUseWs {
   wsRef: React.RefObject<WebSocket | null>;
-  setAudioQueue: React.Dispatch<React.SetStateAction<ArrayBuffer[]>>;
 }
 
-export const useWebSocket = ({ wsRef, setAudioQueue }: IUseWs) => {
+export const useWebSocket = ({ wsRef }: IUseWs) => {
   const { state, dispatch } = useGlobalState();
   const [isConnected, setIsConnected] = useState(false);
 
@@ -56,7 +55,10 @@ export const useWebSocket = ({ wsRef, setAudioQueue }: IUseWs) => {
         });
       } else if (data.type === "audio") {
         const audioBuffer = base64ToBuffer(data.content);
-        setAudioQueue((prev) => [...prev, audioBuffer]);
+        dispatch({
+          type: "ADD_TO_AUDIO_QUEUE",
+          audio: audioBuffer,
+        });
       } else if (data.type === "error") {
         console.error("Server error:", data.content);
         dispatch({

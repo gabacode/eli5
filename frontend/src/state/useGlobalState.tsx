@@ -13,6 +13,8 @@ type StateAction =
   | { type: "SET_STATUS"; status: Status }
   | { type: "SET_MESSAGES"; messages: Message[] }
   | { type: "SET_AUDIO_QUEUE"; queue: ArrayBuffer[] }
+  | { type: "ADD_TO_AUDIO_QUEUE"; audio: ArrayBuffer }
+  | { type: "REMOVE_FIRST_AUDIO" }
   | { type: "MARK_PLAYED"; index: number }
   | { type: "ADD_MESSAGE"; message: Message }
   | { type: "SET_MSG_IDX"; index: number }
@@ -34,6 +36,10 @@ const reducer = (state: State, action: StateAction): State => {
       return { ...state, messages: action.messages };
     case "SET_AUDIO_QUEUE":
       return { ...state, audioQueue: action.queue };
+    case "ADD_TO_AUDIO_QUEUE":
+      return { ...state, audioQueue: [...state.audioQueue, action.audio] };
+    case "REMOVE_FIRST_AUDIO":
+      return { ...state, audioQueue: state.audioQueue.slice(1) };
     case "ADD_MESSAGE":
       return { ...state, messages: [...state.messages, action.message] };
     case "MARK_PLAYED":

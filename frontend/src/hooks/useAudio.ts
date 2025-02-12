@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { useGlobalState } from "../state/useGlobalState";
 
 interface UseAudioProps {
@@ -7,7 +7,6 @@ interface UseAudioProps {
 
 export const useAudio = ({ wsRef }: UseAudioProps) => {
   const { state, dispatch } = useGlobalState();
-  const [audioQueue, setAudioQueue] = useState<ArrayBuffer[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
@@ -41,16 +40,16 @@ export const useAudio = ({ wsRef }: UseAudioProps) => {
     }
     currentSourceRef.current = null;
     onEnd();
-    setAudioQueue((prev) => prev.slice(1));
+    dispatch({ type: "REMOVE_FIRST_AUDIO" });
     dispatch({ type: "SET_IS_PLAYING", isPlaying: false });
   }, [dispatch, onEnd]);
 
   const playNext = useCallback(async () => {
-    if (audioQueue.length === 0 || state.isPlaying) return;
+    if (state.audioQueue.length === 0 || state.isPlaying) return;
 
     try {
       dispatch({ type: "SET_IS_PLAYING", isPlaying: true });
-      const audioData = audioQueue[0];
+      const audioData = state.audioQueue[0];
 
       if (!audioContextRef.current) {
         console.error("No audio context available");
@@ -77,7 +76,7 @@ export const useAudio = ({ wsRef }: UseAudioProps) => {
       source.onended = () => {
         source.disconnect();
         dispatch({ type: "SET_IS_PLAYING", isPlaying: false });
-        setAudioQueue((prev) => prev.slice(1));
+        dispatch({ type: "REMOVE_FIRST_AUDIO" });
         onEnd();
         currentSourceRef.current = null;
       };
@@ -86,15 +85,13 @@ export const useAudio = ({ wsRef }: UseAudioProps) => {
     } catch (error) {
       console.error("Error playing audio:", error);
       dispatch({ type: "SET_IS_PLAYING", isPlaying: false });
-      setAudioQueue((prev) => prev.slice(1));
+      dispatch({ type: "REMOVE_FIRST_AUDIO" });
       dispatch({ type: "SET_MSG_IDX", index: state.messageIdx + 1 });
       currentSourceRef.current = null;
     }
-  }, [audioQueue, dispatch, onEnd, state.isPlaying, state.messageIdx]);
+  }, [dispatch, onEnd, state.audioQueue, state.isPlaying, state.messageIdx]);
 
   return {
-    audioQueue,
-    setAudioQueue,
     playNext,
     skipAudio,
   };

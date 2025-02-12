@@ -11,21 +11,14 @@ const TTSWebSocket = () => {
   const { state, dispatch } = useGlobalState();
 
   const wsRef = useRef<WebSocket | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const { playNext, skipAudio, audioQueue, setAudioQueue } = useAudio({
-    wsRef,
-  });
-
-  const { connectWebSocket, isConnected } = useWebSocket({
-    wsRef,
-    setAudioQueue,
-  });
+  const { playNext, skipAudio } = useAudio({ wsRef });
+  const { connectWebSocket, isConnected } = useWebSocket({ wsRef });
 
   const initState = () => {
     dispatch({ type: "SET_STATUS", status: "uploading" });
     dispatch({ type: "SET_MESSAGES", messages: [] });
-    setAudioQueue([]);
+    dispatch({ type: "SET_AUDIO_QUEUE", queue: [] });
     dispatch({ type: "SET_MSG_IDX", index: 0 });
     if (!isConnected) {
       connectWebSocket();
@@ -33,10 +26,10 @@ const TTSWebSocket = () => {
   };
 
   useEffect(() => {
-    if (audioQueue.length > 0 && !state.isPlaying) {
+    if (state.audioQueue.length > 0 && !state.isPlaying) {
       playNext();
     } else if (
-      audioQueue.length === 0 &&
+      state.audioQueue.length === 0 &&
       state.messages.length > 0 &&
       state.status === "processing"
     ) {
@@ -46,17 +39,13 @@ const TTSWebSocket = () => {
       }
     }
   }, [
-    audioQueue.length,
+    state.audioQueue.length,
     dispatch,
     state.messages,
     playNext,
     state.isPlaying,
     state.status,
   ]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [state.messages]);
 
   return (
     <div className="container py-5">
@@ -71,11 +60,8 @@ const TTSWebSocket = () => {
               <StatusBar />
               {state.messages.length > 0 && (
                 <div className="mt-4">
-                  <MessageBox messagesEndRef={messagesEndRef} />
-                  <MessageFooter
-                    audioQueue={audioQueue}
-                    skipAudio={skipAudio}
-                  />
+                  <MessageBox />
+                  <MessageFooter skipAudio={skipAudio} />
                 </div>
               )}
             </div>

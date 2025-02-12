@@ -1,11 +1,10 @@
 import { useGlobalState } from "../../state/useGlobalState";
 
 interface IMessageFooter {
-  audioQueue: ArrayBuffer[];
   skipAudio: () => void;
 }
 
-export const MessageFooter = ({ audioQueue, skipAudio }: IMessageFooter) => {
+export const MessageFooter = ({ skipAudio }: IMessageFooter) => {
   const { state } = useGlobalState();
 
   const renderStatue = () => {
@@ -13,7 +12,7 @@ export const MessageFooter = ({ audioQueue, skipAudio }: IMessageFooter) => {
       return "Processing complete";
     } else if (state.isPlaying) {
       return "Playing audio...";
-    } else if (audioQueue.length > 0) {
+    } else if (state.audioQueue.length > 0) {
       return "Waiting for next segment...";
     }
   };
@@ -24,7 +23,7 @@ export const MessageFooter = ({ audioQueue, skipAudio }: IMessageFooter) => {
         <span className="text-muted small">
           {state.status === "idle" ? "Idle" : renderStatue()}
         </span>
-        {(state.isPlaying || audioQueue.length > 0) && (
+        {(state.isPlaying || state.audioQueue.length > 0) && (
           <button
             className="btn btn-sm btn-outline-secondary"
             onClick={skipAudio}
@@ -33,8 +32,10 @@ export const MessageFooter = ({ audioQueue, skipAudio }: IMessageFooter) => {
           </button>
         )}
       </div>
-      {audioQueue.length > 0 && (
-        <span className="badge bg-secondary">{audioQueue.length} in queue</span>
+      {state.audioQueue.length > 0 && (
+        <span className="badge bg-secondary">
+          {state.audioQueue.length} in queue
+        </span>
       )}
     </div>
   );
