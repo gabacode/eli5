@@ -1,5 +1,5 @@
 import { ChangeEvent } from "react";
-import { useGlobalState } from "../state/useGlobalState";
+import { useGlobalState } from "../../state/useGlobalState";
 
 interface FileBoxProps {
   wsRef: React.RefObject<WebSocket | null>;

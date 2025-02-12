@@ -1,4 +1,4 @@
-import { useGlobalState } from "../state/useGlobalState";
+import { useGlobalState } from "../../state/useGlobalState";
 
 export const StatusBar = () => {
   const { state } = useGlobalState();

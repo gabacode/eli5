@@ -1,10 +1,6 @@
 import { useEffect, useRef } from "react";
-import { useAudio } from "./hooks/useAudio";
-import { FileBox } from "./components/FileBox";
-import { StatusBar } from "./components/StatusBar";
-import { MessageBox } from "./components/Messages/MessageBox";
-import { MessageFooter } from "./components/Messages/MessageFooter";
-import { useWebSocket } from "./hooks/useWebSocket";
+import { FileBox, StatusBar, MessageBox, MessageFooter } from "./components";
+import { useAudio, useWebSocket } from "./hooks";
 import { useGlobalState } from "./state/useGlobalState";
 
 const TTSWebSocket = () => {
