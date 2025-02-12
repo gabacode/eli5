@@ -7,3 +7,7 @@
 .h-256 {
   height: 256px;
 }
+
+.bg-primary {
+  background: linear-gradient(90deg, #0072ff 0%, #00c6ff 100%);
+}

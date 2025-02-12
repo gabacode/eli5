@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { FileBox, StatusBar, MessageBox, MessageFooter } from "./components";
 import { useAudio, useWebSocket } from "./hooks";
 import { useGlobalState } from "./state/useGlobalState";
-import { PlayingBox } from "./components/Messages/PlayingBox";
 
 const TTSWebSocket = () => {
   const { state, dispatch } = useGlobalState();
@@ -39,7 +38,10 @@ const TTSWebSocket = () => {
       const allPlayed = state.messages.every((msg) => msg.played);
       if (allPlayed) {
         dispatch({ type: "SET_STATUS", status: "completed" });
-        // wsRef.current?.close();
+        const timeoutId = setTimeout(() => {
+          wsRef.current?.close();
+        }, 10000);
+        return () => clearTimeout(timeoutId);
       }
     }
   }, [
@@ -60,22 +62,21 @@ const TTSWebSocket = () => {
               <h5 className="card-title mb-0">ELI5</h5>
             </div>
             <div className="card-body">
-              <div className="mb-4">
+              <div className="mb-2">
                 <div className="text-center p-4 border rounded bg-light">
-                  {state.isPlaying ? (
-                    <PlayingBox onStop={stopPlayback} />
-                  ) : (
-                    <FileBox wsRef={wsRef} onStart={initState} />
-                  )}
+                  <FileBox wsRef={wsRef} onStart={initState} />
                 </div>
               </div>
-              <StatusBar />
               {state.messages.length > 0 && (
-                <div className="mt-4">
+                <div className="mt-2">
                   <MessageBox />
-                  <MessageFooter skipAudio={skipAudio} />
+                  <MessageFooter
+                    skipAudio={skipAudio}
+                    stopAudio={stopPlayback}
+                  />
                 </div>
               )}
+              <StatusBar />
             </div>
           </div>
         </div>
