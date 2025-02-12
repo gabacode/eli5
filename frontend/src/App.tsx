@@ -32,6 +32,7 @@ const TTSWebSocket = () => {
       const allPlayed = state.messages.every((msg) => msg.played);
       if (allPlayed) {
         dispatch({ type: "SET_STATUS", status: "completed" });
+        wsRef.current?.close();
       }
     }
   }, [

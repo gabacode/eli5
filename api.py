@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import gc
 import json
 import logging
 import threading
@@ -7,6 +8,7 @@ from pathlib import Path
 from queue import Empty
 from typing import Dict
 
+import torch
 import websockets
 
 from main import Application, Config
@@ -15,7 +17,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
 )
-
 
 class TTSTransmitter:
     """Handles the transmission of TTS data over WebSocket."""
@@ -33,7 +34,6 @@ class TTSTransmitter:
             thread_timeout=10
         )
         self.app = Application(config)
-        # Only start the recording thread, not the playback thread
         self.app.create_rec_thread()
 
     async def transmit_audio(self, audio_text_pair):
@@ -72,6 +72,7 @@ class TTSTransmitter:
                         self.transmit_audio(audio_text_pair),
                         event_loop
                     )
+
             except Empty:
                 continue
             except Exception as e:
@@ -89,6 +90,12 @@ class TTSTransmitter:
                     break
                 last_section = self.app.text_processor.destop_words(sections[i - 2]) if i > 1 else ""
                 self.app.process_section(last_section, section)
+
+            # Empty memory here
+            if torch.cuda.is_available():
+                logging.info("Emptying CUDA cache")
+                torch.cuda.empty_cache()
+                gc.collect()
 
         except Exception as e:
             logging.error(f"Error processing text: {e}")
