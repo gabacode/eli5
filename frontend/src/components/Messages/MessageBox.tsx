@@ -22,7 +22,7 @@ export const MessageBox = () => {
   return (
     <div
       className="p-3 bg-light rounded"
-      style={{ maxHeight: "400px", overflowY: "auto" }}
+      style={{ maxHeight: "256px", overflowY: "auto" }}
     >
       {state.messages
         .filter((_, idx) => idx <= state.messageIdx)

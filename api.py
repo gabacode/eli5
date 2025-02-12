@@ -3,22 +3,20 @@ import base64
 import gc
 import io
 import json
-import logging
 import threading
 from pathlib import Path
 from queue import Empty
-from typing import Dict
+from typing import Dict, List
 
 import pdfplumber
 import torch
 import websockets
 
+from libs.nlp.text_processor import SectionInfo
+from libs.utils.logger import Logger
 from main import Application, Config
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
-)
+logger = Logger()
 
 
 class TTSTransmitter:
@@ -42,35 +40,27 @@ class TTSTransmitter:
     async def transmit_audio(self, audio_text_pair):
         """Transmit a single audio-text pair over WebSocket."""
         try:
-            # Send text first
             await self.websocket.send(json.dumps({
                 'type': 'text',
                 'content': audio_text_pair.text
             }))
-
-            # Read and send audio data
             with open(audio_text_pair.audio_path, 'rb') as f:
                 audio_data = f.read()
                 await self.websocket.send(json.dumps({
                     'type': 'audio',
                     'content': base64.b64encode(audio_data).decode('utf-8')
                 }))
-
-            # Cleanup the audio file
             self.app.file_manager.cleanup_file(audio_text_pair.audio_path)
 
         except Exception as e:
-            logging.error(f"Error transmitting audio: {e}")
+            logger.error(f"Error transmitting audio: {e}")
 
     def monitor_queue(self, event_loop):
         """Monitor the playback queue and schedule transmissions."""
         while not self.shutdown_flag.is_set():
             try:
-                # Try to get an item from the queue
                 audio_text_pair = self.app.playback_queue.get(timeout=0.5)
-
                 if audio_text_pair and audio_text_pair.audio_path.exists():
-                    # Schedule the transmission in the event loop
                     asyncio.run_coroutine_threadsafe(
                         self.transmit_audio(audio_text_pair),
                         event_loop
@@ -79,29 +69,36 @@ class TTSTransmitter:
             except Empty:
                 continue
             except Exception as e:
-                logging.error(f"Error in queue monitoring: {e}")
+                logger.error(f"Error in queue monitoring: {e}")
                 continue
 
     def process_text(self, content: str):
         """Process the text content."""
         try:
-            sections = self.app.text_processor.split_into_sections(content)
-            logging.info(f"Found {len(sections)} sections")
+            sections_info: List[SectionInfo] = self.app.text_processor.split_into_sections(content, 250, 50)
+            logger.info(f"Found {len(sections_info)} sections")
 
-            for i, section in enumerate(sections, 1):
+            for i, section_info in enumerate(sections_info, 1):
+                section_text = section_info.section
+                subjects = section_info.subjects
+
+                logger.info(f"Processing section {i}/{len(sections_info)}")
+                logger.info(f"Subjects: {subjects}")
+
                 if self.shutdown_flag.is_set():
                     break
-                last_section = self.app.text_processor.destop_words(sections[i - 2]) if i > 1 else ""
-                self.app.process_section(last_section, section)
+
+                last_section = self.app.text_processor.destop_words(sections_info[i - 2].section) if i > 1 else ""
+                self.app.process_section(last_section, section_text)
 
             # Empty memory here
             if torch.cuda.is_available():
-                logging.info("Emptying CUDA cache")
+                logger.info("Emptying CUDA cache")
                 torch.cuda.empty_cache()
                 gc.collect()
 
         except Exception as e:
-            logging.error(f"Error processing text: {e}")
+            logger.error(f"Error processing text: {e}")
 
     def shutdown(self):
         """Shutdown the transmitter and cleanup resources."""
@@ -137,7 +134,7 @@ class TTSServer:
                 text_content = content_bytes.decode("utf-8", errors="ignore")
                 await self.process_text(text_content, websocket, session_id)
         except Exception as e:
-            logging.error(f"Error handling upload: {e}")
+            logger.error(f"Error handling upload: {e}")
             await websocket.send(json.dumps({
                 'type': 'error',
                 'content': str(e)
@@ -146,8 +143,8 @@ class TTSServer:
     async def process_text(self, content: str, websocket, session_id: str):
         """Transmit the text content over WebSocket."""
         try:
-            print(f"Processing text for session: {session_id}")
-            print(content)
+            logger.info(f"Processing text for session: {session_id}")
+            logger.debug(content)
             transmitter = TTSTransmitter(websocket, session_id)
             self.transmitters[session_id] = transmitter
 
@@ -173,7 +170,7 @@ class TTSServer:
             process_thread.start()
 
         except Exception as e:
-            logging.error(f"Error processing text: {e}")
+            logger.error(f"Error processing text: {e}")
             await websocket.send(json.dumps({
                 'type': 'error',
                 'content': str(e)
@@ -203,17 +200,17 @@ class TTSServer:
                     if 'content' in data:
                         await self.handle_upload(websocket, data['content'], session_id)
                 except json.JSONDecodeError:
-                    logging.error("Invalid JSON received")
+                    logger.error("Invalid JSON received")
 
         except websockets.exceptions.ConnectionClosed:
-            logging.info(f"Client disconnected: {session_id}")
+            logger.info(f"Client disconnected: {session_id}")
         finally:
             await self.cleanup_session(session_id)
 
     async def start(self):
         """Start the WebSocket server."""
         async with websockets.serve(self.handle_connection, self.host, self.port):
-            logging.info(f"TTS Server running at ws://{self.host}:{self.port}")
+            logger.info(f"TTS Server running at ws://{self.host}:{self.port}")
             await asyncio.Future()  # run forever
 
 
