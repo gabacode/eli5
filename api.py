@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import gc
+import io
 import json
 import logging
 import threading
@@ -8,6 +9,7 @@ from pathlib import Path
 from queue import Empty
 from typing import Dict
 
+import pdfplumber
 import torch
 import websockets
 
@@ -17,6 +19,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
 )
+
 
 class TTSTransmitter:
     """Handles the transmission of TTS data over WebSocket."""
@@ -116,9 +119,35 @@ class TTSServer:
         self.transmitters: Dict[str, TTSTransmitter] = {}
 
     async def handle_upload(self, websocket, content: str, session_id: str):
-        """Handle text upload and start processing."""
+        """Handle file upload and start processing."""
         try:
-            # Create and setup transmitter
+            if content.startswith('data:'):
+                content = content.split(',')[1]
+            content_bytes = base64.b64decode(content)
+            if content_bytes.startswith(b'%PDF'):
+                with io.BytesIO(content_bytes) as pdf_file:
+                    with pdfplumber.open(pdf_file) as pdf:
+                        text = ""
+                        for page in pdf.pages:
+                            text += page.extract_text() or ""
+                if not text:
+                    raise Exception("No text extracted from PDF")
+                await self.process_text(text, websocket, session_id)
+            else:
+                text_content = content_bytes.decode("utf-8", errors="ignore")
+                await self.process_text(text_content, websocket, session_id)
+        except Exception as e:
+            logging.error(f"Error handling upload: {e}")
+            await websocket.send(json.dumps({
+                'type': 'error',
+                'content': str(e)
+            }))
+
+    async def process_text(self, content: str, websocket, session_id: str):
+        """Transmit the text content over WebSocket."""
+        try:
+            print(f"Processing text for session: {session_id}")
+            print(content)
             transmitter = TTSTransmitter(websocket, session_id)
             self.transmitters[session_id] = transmitter
 
@@ -144,7 +173,7 @@ class TTSServer:
             process_thread.start()
 
         except Exception as e:
-            logging.error(f"Error handling upload: {e}")
+            logging.error(f"Error processing text: {e}")
             await websocket.send(json.dumps({
                 'type': 'error',
                 'content': str(e)

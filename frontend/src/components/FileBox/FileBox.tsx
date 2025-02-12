@@ -16,9 +16,12 @@ export const FileBox = ({ wsRef, onStart }: FileBoxProps) => {
       onStart();
       const content = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onload = (e) => {
+          const base64String = e.target?.result as string;
+          resolve(base64String.split(",")[1]);
+        };
         reader.onerror = (e) => reject(e);
-        reader.readAsText(file);
+        reader.readAsDataURL(file);
       });
       while (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -41,7 +44,7 @@ export const FileBox = ({ wsRef, onStart }: FileBoxProps) => {
         <input
           type="file"
           className="d-none"
-          accept=".txt"
+          accept=".txt, .pdf"
           onChange={handleFileUpload}
           id="fileInput"
           disabled={state.status === "processing"}
