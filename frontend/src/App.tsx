@@ -65,7 +65,7 @@ const TTSWebSocket = () => {
             <div className="card-body">
               <div className="mb-2">
                 <div className="text-center border rounded bg-light">
-                  {state.isPlaying ? (
+                  {state.status === "processing" ? (
                     <AudioVisualizer />
                   ) : (
                     <FileBox wsRef={wsRef} onStart={initState} />
