@@ -18,11 +18,21 @@ export const useWebSocket = ({ wsRef }: IUseWs) => {
     return bytes.buffer;
   };
 
+  const waitForWebSocket = async (timeout = 5000) => {
+    const start = Date.now();
+    while (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      if (Date.now() - start > timeout) {
+        throw new Error("WebSocket connection timeout");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  };
+
   const connectWebSocket = () => {
     if (wsRef.current) wsRef.current.close();
 
     const ws = new WebSocket("ws://localhost:8765");
-    wsRef.current = ws;
+    (wsRef.current as WebSocket | null) = ws;
 
     ws.onopen = () => {
       console.log("WebSocket connected");
@@ -40,34 +50,44 @@ export const useWebSocket = ({ wsRef }: IUseWs) => {
 
     ws.onerror = (error: Event) => {
       console.error("WebSocket error:", error);
-      dispatch({
-        type: "SET_STATUS",
-        status: "idle",
-      });
+      throw new Error("WebSocket encountered an error");
     };
 
     ws.onmessage = async (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "text") {
-        dispatch({
-          type: "ADD_MESSAGE",
-          message: { text: data.content, played: false },
-        });
-      } else if (data.type === "audio") {
-        const audioBuffer = base64ToBuffer(data.content);
-        dispatch({
-          type: "ADD_TO_AUDIO_QUEUE",
-          audio: audioBuffer,
-        });
-      } else if (data.type === "error") {
-        console.error("Server error:", data.content);
-        dispatch({
-          type: "SET_STATUS",
-          status: "idle",
-        });
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "text") {
+          dispatch({
+            type: "ADD_MESSAGE",
+            message: { text: data.content, played: false },
+          });
+        } else if (data.type === "audio") {
+          const audioBuffer = base64ToBuffer(data.content);
+          dispatch({
+            type: "ADD_TO_AUDIO_QUEUE",
+            audio: audioBuffer,
+          });
+        } else if (data.type === "error") {
+          throw new Error(`Server error: ${data.content}`);
+        }
+      } catch (error) {
+        console.error("WebSocket message processing error:", error);
+        dispatch({ type: "SET_STATUS", status: "idle" });
       }
     };
   };
 
-  return { connectWebSocket, isConnected };
+  const sendMessage = async (message: object) => {
+    try {
+      await waitForWebSocket();
+      if (!wsRef.current) throw new Error("WebSocket is not connected");
+
+      wsRef.current.send(JSON.stringify(message));
+    } catch (error) {
+      console.error("WebSocket send error:", error);
+      throw error;
+    }
+  };
+
+  return { connectWebSocket, sendMessage, isConnected };
 };

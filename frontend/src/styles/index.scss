@@ -1,0 +1,27 @@
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: rgb(30, 30, 30);
+}
+
+.h-256 {
+  height: 256px;
+}
+
+.bg-primary {
+  background: linear-gradient(90deg, #0072ff 0%, #00c6ff 100%);
+}
+
+#fileBox {
+  border: 2px dashed transparent;
+  text-align: center;
+  padding: 20px;
+  transition: border-color 0.15s ease-in-out;
+  border-radius: 0.25rem;
+}
+
+.dragging {
+  border: 2px dashed #007bff !important;
+  background-color: rgba(0, 123, 255, 0.05);
+}
