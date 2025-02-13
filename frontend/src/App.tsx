@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { FileBox, StatusBar, MessageBox, MessageFooter } from "./components";
 import { useAudio, useWebSocket } from "./hooks";
 import { useGlobalState } from "./state/useGlobalState";
+import { AudioVisualizer } from "./components/AudioVisualizer";
 
 const TTSWebSocket = () => {
   const { state, dispatch } = useGlobalState();
@@ -11,7 +12,7 @@ const TTSWebSocket = () => {
   const { playNext, skipAudio } = useAudio({ wsRef });
   const { connectWebSocket, isConnected } = useWebSocket({ wsRef });
 
-  const initState = () => {
+  const initState = useCallback(() => {
     dispatch({ type: "SET_STATUS", status: "uploading" });
     dispatch({ type: "SET_MESSAGES", messages: [] });
     dispatch({ type: "SET_AUDIO_QUEUE", queue: [] });
@@ -19,7 +20,7 @@ const TTSWebSocket = () => {
     if (!isConnected) {
       connectWebSocket();
     }
-  };
+  }, [dispatch, isConnected, connectWebSocket]);
 
   const stopPlayback = () => {
     wsRef.current?.close();
@@ -63,8 +64,12 @@ const TTSWebSocket = () => {
             </div>
             <div className="card-body">
               <div className="mb-2">
-                <div className="text-center p-4 border rounded bg-light">
-                  <FileBox wsRef={wsRef} onStart={initState} />
+                <div className="text-center border rounded bg-light">
+                  {state.isPlaying ? (
+                    <AudioVisualizer />
+                  ) : (
+                    <FileBox wsRef={wsRef} onStart={initState} />
+                  )}
                 </div>
               </div>
               {state.messages.length > 0 && (

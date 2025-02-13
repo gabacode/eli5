@@ -48,7 +48,9 @@ export const useAudio = ({ wsRef }: UseAudioProps) => {
     if (state.audioQueue.length === 0 || state.isPlaying) return;
 
     try {
-      dispatch({ type: "SET_IS_PLAYING", isPlaying: true });
+      if (!state.isPlaying) {
+        dispatch({ type: "SET_IS_PLAYING", isPlaying: true });
+      }
       const audioData = state.audioQueue[0];
 
       if (!audioContextRef.current) {
