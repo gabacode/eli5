@@ -32,7 +32,11 @@ export const FileBox = ({ wsRef, onStart }: FileBoxProps) => {
       onDragEnter={onDragEnter}
       className={isDragging ? "dragging" : ""}
     >
-      {file ? <FilenameBox fileName={file.name} /> : <UploadBox />}
+      {file ? (
+        <FilenameBox fileName={file.name} />
+      ) : (
+        <UploadBox onFileChange={onDropped} />
+      )}
     </div>
   );
 };

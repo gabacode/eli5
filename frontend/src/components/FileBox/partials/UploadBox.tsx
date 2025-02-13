@@ -1,9 +1,19 @@
+import { ChangeEvent } from "react";
 import { useGlobalState } from "../../../state/useGlobalState";
 
-export const UploadBox = () => {
+interface UploadBoxProps {
+  onFileChange: (file: File) => void;
+}
+
+export const UploadBox = ({ onFileChange }: UploadBoxProps) => {
   const { state } = useGlobalState();
 
   const buttonClass = state.status === "processing" ? "disabled" : "";
+
+  const handleFileInput = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) onFileChange(file);
+  };
 
   return (
     <div>
@@ -12,10 +22,11 @@ export const UploadBox = () => {
         <strong>Click to upload</strong> or drag and drop a text file
       </p>
       <input
+        id="fileInput"
         type="file"
         className="d-none"
         accept=".txt, .pdf"
-        id="fileInput"
+        onChange={handleFileInput}
         disabled={state.status === "processing"}
       />
       <label htmlFor="fileInput" className={`btn btn-primary ${buttonClass}`}>
