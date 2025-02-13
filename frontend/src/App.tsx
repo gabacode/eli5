@@ -9,7 +9,7 @@ const TTSWebSocket = () => {
 
   const wsRef = useRef<WebSocket | null>(null);
 
-  const { playNext, skipAudio } = useAudio({ wsRef });
+  const { playNext, skipAudio, analyzerRef } = useAudio({ wsRef });
   const { connectWebSocket, isConnected } = useWebSocket({ wsRef });
 
   const initState = useCallback(() => {
@@ -66,7 +66,7 @@ const TTSWebSocket = () => {
               <div className="mb-2">
                 <div className="text-center border rounded bg-light">
                   {state.status === "processing" ? (
-                    <AudioVisualizer />
+                    <AudioVisualizer analyzerRef={analyzerRef} />
                   ) : (
                     <FileBox wsRef={wsRef} onStart={initState} />
                   )}

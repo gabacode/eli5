@@ -1,6 +1,6 @@
 import { useCallback, useRef, useEffect } from "react";
 import { useGlobalState } from "../state/useGlobalState";
-import { AudioAnalyzer } from "../components/AudioVisualizer";
+import { AudioAnalyzer } from "../components/AudioVisualizer/Analyzer";
 
 interface UseAudioProps {
   wsRef: React.RefObject<WebSocket | null>;
@@ -9,7 +9,7 @@ interface UseAudioProps {
 interface UseAudioReturn {
   playNext: () => Promise<void>;
   skipAudio: () => void;
-  analyzer: AudioAnalyzer | null;
+  analyzerRef: React.MutableRefObject<AudioAnalyzer | null>;
   audioContextRef: React.RefObject<AudioContext | null>;
 }
 
@@ -22,7 +22,6 @@ export const useAudio = ({ wsRef }: UseAudioProps): UseAudioReturn => {
   useEffect(() => {
     audioContextRef.current = new window.AudioContext();
 
-    // Create analyzer when context is available
     if (audioContextRef.current) {
       analyzerRef.current = new AudioAnalyzer(audioContextRef.current);
     }
@@ -72,13 +71,10 @@ export const useAudio = ({ wsRef }: UseAudioProps): UseAudioReturn => {
         console.error("No audio context available");
         return;
       }
-
       const audioBuffer = await audioContextRef.current.decodeAudioData(
         audioData.slice(0)
       );
-
       const source = audioContextRef.current.createBufferSource();
-
       if (currentSourceRef.current) {
         try {
           currentSourceRef.current.disconnect();
@@ -86,35 +82,25 @@ export const useAudio = ({ wsRef }: UseAudioProps): UseAudioReturn => {
           console.error("Error disconnecting previous source:", e);
         }
       }
-
       currentSourceRef.current = source;
       source.buffer = audioBuffer;
 
-      // Create analyzer if it doesn't exist
       if (!analyzerRef.current && audioContextRef.current) {
         analyzerRef.current = new AudioAnalyzer(audioContextRef.current);
         console.log("Created new analyzer:", analyzerRef.current);
       }
-
-      // Create a gain node to control volume
       const gainNode = audioContextRef.current.createGain();
       gainNode.gain.value = 1.0;
 
       if (analyzerRef.current) {
-        // Connect in series: source -> analyzer -> gain -> destination
         const analyzerNode = analyzerRef.current.getAnalyzerNode();
-
-        // First disconnect any existing connections
         try {
           source.disconnect();
           analyzerNode.disconnect();
           gainNode.disconnect();
         } catch (e) {
           console.log(e);
-          // Ignore disconnection errors
         }
-
-        // Create new connection chain
         source.connect(analyzerNode);
         analyzerNode.connect(gainNode);
         gainNode.connect(audioContextRef.current.destination);
@@ -147,7 +133,7 @@ export const useAudio = ({ wsRef }: UseAudioProps): UseAudioReturn => {
   return {
     playNext,
     skipAudio,
-    analyzer: analyzerRef.current,
+    analyzerRef,
     audioContextRef,
   };
 };
