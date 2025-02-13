@@ -4,6 +4,11 @@ import { ShaderMaterial } from "three";
 import { ReactThreeFiber } from "@react-three/fiber";
 import { Color } from "three";
 
+declare module "*.glsl" {
+  const file: string;
+  export default file;
+}
+
 declare module "@react-three/fiber" {
   interface ThreeElements {
     customShaderMaterial: ReactThreeFiber.Object3DNode<

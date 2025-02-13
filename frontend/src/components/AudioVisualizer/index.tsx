@@ -1,10 +1,10 @@
 import { Canvas, extend, useFrame, useThree } from "@react-three/fiber";
-import { shaderMaterial } from "@react-three/drei";
-
+import { shaderMaterial, OrbitControls } from "@react-three/drei";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { AudioAnalyzer } from "./Analyzer";
-import { fragmentShader, vertexShader } from "./shaders";
+import vertexShader from "./shaders/vertexShader.glsl?raw";
+import fragmentShader from "./shaders/fragmentShader.glsl?raw";
 
 const CustomShaderMaterial = shaderMaterial(
   {
@@ -55,37 +55,49 @@ const Scene = ({ analyzerRef }: AudioVisualizerProps) => {
     if (meshRef.current && materialRef.current && analyzerRef.current) {
       const uniforms = materialRef.current.uniforms;
       uniforms.u_time.value = clock.getElapsedTime();
-      console.log("Current Amplitude:", amplitudeRef.current);
-      uniforms.u_frequency.value = amplitudeRef.current;
-      meshRef.current.rotation.y += 0.001;
+      if (amplitudeRef.current > 0.1) {
+        uniforms.u_frequency.value = amplitudeRef.current * 1.5;
+      } else {
+        uniforms.u_frequency.value = 0;
+      }
+      meshRef.current.rotation.y += 0.0001;
     }
   });
 
   return (
-    <mesh ref={meshRef}>
-      <icosahedronGeometry args={[4, 15]} />
-      <customShaderMaterial
-        ref={materialRef}
-        wireframe
-        transparent
-        uniforms-u_time-value={0}
-        uniforms-u_frequency-value={0}
-        uniforms-u_color-value={new THREE.Color(0.5, 0.8, 1.0)}
-      />
-    </mesh>
+    <>
+      <ambientLight intensity={0.5} />
+      <pointLight position={[10, 10, 10]} intensity={1} />
+      <pointLight position={[-10, -10, -10]} intensity={0.5} />
+
+      <mesh ref={meshRef}>
+        <icosahedronGeometry args={[4, 15]} />
+        <customShaderMaterial
+          ref={materialRef}
+          wireframe
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </>
   );
 };
 
 export const AudioVisualizer = ({ analyzerRef }: AudioVisualizerProps) => {
   const options = {
-    antialias: true,
+    antialias: true, // Enable antialiasing for smoother edges
+    powerPreference: "high-performance",
     outputColorSpace: THREE.SRGBColorSpace,
   };
 
   return (
     <div style={{ width: "100%", height: "400px", background: "transparent" }}>
-      <Canvas camera={{ fov: 58, near: 0.1, far: 1000 }} gl={options}>
+      <Canvas
+        camera={{ fov: 58, near: 0.1, far: 1000 }}
+        gl={options}
+        shadows // Enable shadow mapping
+      >
         <Scene analyzerRef={analyzerRef} />
+        <OrbitControls enableDamping dampingFactor={0.05} />
       </Canvas>
     </div>
   );

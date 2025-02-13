@@ -13,7 +13,7 @@ export class AudioAnalyzer implements AudioAnalyzerInterface {
 
   constructor(context: AudioContext) {
     this.analyzer = context.createAnalyser();
-    this.analyzer.fftSize = 32;
+    this.analyzer.fftSize = 128;
     this.analyzer.minDecibels = -90;
     this.analyzer.maxDecibels = -10;
     this.analyzer.smoothingTimeConstant = 0.65;
