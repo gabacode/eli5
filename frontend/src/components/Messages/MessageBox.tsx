@@ -7,9 +7,9 @@ export const MessageBox = () => {
 
   const getMessageStyle = (msg: Message, actualIdx: number) => {
     if (actualIdx === state.messageIdx && state.isPlaying) {
-      return "bg-primary text-white";
+      return "bg-primary";
     }
-    return msg.played ? "bg-white border opacity-75" : "bg-white border";
+    return msg.played ? "border opacity-75" : "border";
   };
 
   const messages = useMemo(() => {
@@ -17,7 +17,7 @@ export const MessageBox = () => {
   }, [state.messages, state.messageIdx]);
 
   return (
-    <div className="p-3 bg-light rounded d-flex flex-column overflow-auto h-256 border">
+    <div className="p-3 rounded d-flex flex-column overflow-auto h-256 border">
       {messages.map((msg, reversedIdx, arr) => {
         const actualIdx = arr.length - 1 - reversedIdx;
         return (

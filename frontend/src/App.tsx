@@ -55,33 +55,35 @@ const TTSWebSocket = () => {
   ]);
 
   return (
-    <div className="container py-5">
-      <div className="row justify-content-center">
-        <div className="col-md-8">
-          <div className="card shadow-sm">
-            <div className="card-header bg-primary text-white">
-              <h5 className="card-title mb-0">ELI5</h5>
-            </div>
-            <div className="card-body">
-              <div className="mb-2">
-                <div className="text-center border rounded bg-light">
-                  {state.status === "processing" ? (
-                    <AudioVisualizer analyzerRef={analyzerRef} />
-                  ) : (
-                    <FileBox wsRef={wsRef} onStart={initState} />
-                  )}
-                </div>
+    <div data-bs-theme="dark">
+      <div className="container py-5">
+        <div className="row justify-content-center">
+          <div className="col-md-8">
+            <div className="card shadow-sm">
+              <div className="card-header bg-primary text-white">
+                <h5 className="card-title mb-0">ELI5</h5>
               </div>
-              {state.messages.length > 0 && (
-                <div className="mt-2">
-                  <MessageBox />
-                  <MessageFooter
-                    skipAudio={skipAudio}
-                    stopAudio={stopPlayback}
-                  />
+              <div className="card-body">
+                <div className="mb-2">
+                  <div className="text-center border rounded">
+                    {state.status === "processing" ? (
+                      <AudioVisualizer analyzerRef={analyzerRef} />
+                    ) : (
+                      <FileBox wsRef={wsRef} onStart={initState} />
+                    )}
+                  </div>
                 </div>
-              )}
-              <StatusBar />
+                {state.messages.length > 0 && (
+                  <div className="mt-2">
+                    <MessageBox />
+                    <MessageFooter
+                      skipAudio={skipAudio}
+                      stopAudio={stopPlayback}
+                    />
+                  </div>
+                )}
+                <StatusBar />
+              </div>
             </div>
           </div>
         </div>

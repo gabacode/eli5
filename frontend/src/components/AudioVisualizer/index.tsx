@@ -36,9 +36,9 @@ export const AudioVisualizer = ({ analyzerRef }: AudioVisualizerProps) => {
       <Canvas camera={{ fov: 58, near: 0.1, far: 1000 }} gl={options} shadows>
         <Scene
           analyzerRef={analyzerRef}
-          colorStart="#00bdff"
-          colorEnd="black"
-          multiplier={1.6}
+          colorStart="orange"
+          colorEnd="white"
+          multiplier={1}
         />
         <OrbitControls enableDamping dampingFactor={0.05} />
       </Canvas>
