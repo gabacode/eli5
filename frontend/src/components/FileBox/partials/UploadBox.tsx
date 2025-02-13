@@ -1,10 +1,6 @@
 import { useGlobalState } from "../../../state/useGlobalState";
 
-interface UploadBoxProps {
-  handleFileInput: (event: React.ChangeEvent<HTMLInputElement>) => void;
-}
-
-export const UploadBox = ({ handleFileInput }: UploadBoxProps) => {
+export const UploadBox = () => {
   const { state } = useGlobalState();
 
   const buttonClass = state.status === "processing" ? "disabled" : "";
@@ -19,7 +15,6 @@ export const UploadBox = ({ handleFileInput }: UploadBoxProps) => {
         type="file"
         className="d-none"
         accept=".txt, .pdf"
-        onChange={handleFileInput}
         id="fileInput"
         disabled={state.status === "processing"}
       />

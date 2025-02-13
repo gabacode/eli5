@@ -89,5 +89,24 @@ export const useWebSocket = ({ wsRef }: IUseWs) => {
     }
   };
 
-  return { connectWebSocket, sendMessage, isConnected };
+  const uploadFile = async (file: File) => {
+    try {
+      const content = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64String = e.target?.result as string;
+          resolve(base64String.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      await sendMessage({ content });
+      dispatch({ type: "SET_STATUS", status: "processing" });
+    } catch (error) {
+      console.error("Error handling file:", error);
+      dispatch({ type: "SET_STATUS", status: "idle" });
+    }
+  };
+
+  return { connectWebSocket, uploadFile, isConnected };
 };
