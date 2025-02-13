@@ -61,13 +61,18 @@ const TTSWebSocket = () => {
           <div className="col-md-8">
             <div className="card shadow-sm">
               <div className="card-header bg-primary text-white">
-                <h5 className="card-title mb-0">ELI5</h5>
+                <h5 className="card-title mb-0">ELI5 🙋</h5>
               </div>
               <div className="card-body">
                 <div className="mb-2">
                   <div className="text-center border rounded">
-                    {state.status === "processing" ? (
-                      <AudioVisualizer analyzerRef={analyzerRef} />
+                    {state.audioQueue.length > 0 ? (
+                      <AudioVisualizer
+                        analyzerRef={analyzerRef}
+                        colorStart="purple"
+                        colorEnd="#00c6ff"
+                        multiplier={3.0}
+                      />
                     ) : (
                       <FileBox wsRef={wsRef} onStart={initState} />
                     )}

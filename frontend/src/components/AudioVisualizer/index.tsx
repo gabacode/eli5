@@ -22,9 +22,17 @@ extend({ CustomShaderMaterial });
 
 interface AudioVisualizerProps {
   analyzerRef: React.MutableRefObject<AudioAnalyzer | null>;
+  colorStart: string;
+  colorEnd: string;
+  multiplier: number;
 }
 
-export const AudioVisualizer = ({ analyzerRef }: AudioVisualizerProps) => {
+export const AudioVisualizer = ({
+  analyzerRef,
+  colorStart,
+  colorEnd,
+  multiplier,
+}: AudioVisualizerProps) => {
   const options = {
     antialias: true,
     powerPreference: "high-performance",
@@ -36,9 +44,9 @@ export const AudioVisualizer = ({ analyzerRef }: AudioVisualizerProps) => {
       <Canvas camera={{ fov: 58, near: 0.1, far: 1000 }} gl={options} shadows>
         <Scene
           analyzerRef={analyzerRef}
-          colorStart="orange"
-          colorEnd="white"
-          multiplier={1}
+          colorStart={colorStart}
+          colorEnd={colorEnd}
+          multiplier={multiplier}
         />
         <OrbitControls enableDamping dampingFactor={0.05} />
       </Canvas>
