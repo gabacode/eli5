@@ -50,6 +50,10 @@ class TTSTransmitter:
                 }))
             self.app.file_manager.cleanup_file(audio_text_pair.audio_path)
 
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.error(f"WebSocket connection closed: {e}")
+            self.shutdown()
+            raise
         except Exception as e:
             logger.error(f"Error transmitting audio: {e}")
 
@@ -59,11 +63,17 @@ class TTSTransmitter:
             try:
                 audio_text_pair = self.app.playback_queue.get(timeout=0.5)
                 if audio_text_pair and audio_text_pair.audio_path.exists():
-                    asyncio.run_coroutine_threadsafe(
-                        self.transmit_audio(audio_text_pair),
-                        event_loop
-                    )
-
+                    try:
+                        future = asyncio.run_coroutine_threadsafe(
+                            self.transmit_audio(audio_text_pair),
+                            event_loop
+                        )
+                        future.result()
+                    except websockets.exceptions.ConnectionClosed:
+                        logger.error("WebSocket connection closed, stopping queue monitor")
+                        self.shutdown_flag.set()
+                        self.shutdown()
+                        break
             except Empty:
                 continue
             except Exception as e:
@@ -196,6 +206,8 @@ class TTSServer:
                     logger.error("Invalid JSON received")
         except websockets.exceptions.ConnectionClosed:
             logger.info(f"Client disconnected: {session_id}")
+        finally:
+            await self.cleanup_session(session_id)
 
     async def handle_chunk(self, websocket, data, session_id: str):
         """Handle incoming file chunk."""
