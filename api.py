@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import gc
 import io
 import json
 import threading
@@ -9,7 +8,6 @@ from queue import Empty
 from typing import Dict, List
 
 import pdfplumber
-import torch
 import websockets
 
 from libs.nlp.text_processor import SectionInfo
@@ -92,10 +90,7 @@ class TTSTransmitter:
                 self.app.process_section(last_section, section_text)
 
             # Empty memory here
-            if torch.cuda.is_available():
-                logger.info("Emptying CUDA cache")
-                torch.cuda.empty_cache()
-                gc.collect()
+            self.app.empty_cache()
 
         except Exception as e:
             logger.error(f"Error processing text: {e}")
@@ -114,15 +109,13 @@ class TTSServer:
         self.host = host
         self.port = port
         self.transmitters: Dict[str, TTSTransmitter] = {}
+        self.chunks = {}
 
-    async def handle_upload(self, websocket, content: str, session_id: str):
+    async def handle_upload(self, websocket, content: bytes, session_id: str):
         """Handle file upload and start processing."""
         try:
-            if content.startswith('data:'):
-                content = content.split(',')[1]
-            content_bytes = base64.b64decode(content)
-            if content_bytes.startswith(b'%PDF'):
-                with io.BytesIO(content_bytes) as pdf_file:
+            if content.startswith(b'%PDF'):
+                with io.BytesIO(content) as pdf_file:
                     with pdfplumber.open(pdf_file) as pdf:
                         text = ""
                         for page in pdf.pages:
@@ -131,7 +124,7 @@ class TTSServer:
                     raise Exception("No text extracted from PDF")
                 await self.process_text(text, websocket, session_id)
             else:
-                text_content = content_bytes.decode("utf-8", errors="ignore")
+                text_content = content.decode("utf-8", errors="ignore")
                 await self.process_text(text_content, websocket, session_id)
         except Exception as e:
             logger.error(f"Error handling upload: {e}")
@@ -191,21 +184,41 @@ class TTSServer:
                 cache_dir.rmdir()
 
     async def handle_connection(self, websocket):
-        """Handle incoming WebSocket connection."""
+        """Handle incoming WebSocket upload requests."""
         session_id = str(hash(websocket))
         try:
             async for message in websocket:
                 try:
                     data = json.loads(message)
-                    if 'content' in data:
-                        await self.handle_upload(websocket, data['content'], session_id)
+                    if data.get('type') == 'chunk':
+                        await self.handle_chunk(websocket, data, session_id)
                 except json.JSONDecodeError:
                     logger.error("Invalid JSON received")
-
         except websockets.exceptions.ConnectionClosed:
             logger.info(f"Client disconnected: {session_id}")
-        finally:
-            await self.cleanup_session(session_id)
+
+    async def handle_chunk(self, websocket, data, session_id: str):
+        """Handle incoming file chunk."""
+        try:
+            file_id = f"{session_id}_{data['filename']}"
+            if file_id not in self.chunks:
+                self.chunks[file_id] = {
+                    'chunks': [None] * data['totalChunks'],
+                    'content_type': data['contentType']
+                }
+            chunk_data = bytes(data['content'])
+            self.chunks[file_id]['chunks'][data['chunkIndex']] = chunk_data
+            if all(chunk is not None for chunk in self.chunks[file_id]['chunks']):
+                complete_content = b''.join(self.chunks[file_id]['chunks'])
+                await self.handle_upload(websocket, complete_content, session_id)
+                del self.chunks[file_id]
+
+        except Exception as e:
+            logger.error(f"Error handling chunk: {e}")
+            await websocket.send(json.dumps({
+                'type': 'error',
+                'content': str(e)
+            }))
 
     async def start(self):
         """Start the WebSocket server."""

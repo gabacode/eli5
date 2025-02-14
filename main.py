@@ -1,7 +1,10 @@
+import gc
 import hashlib
 import threading
 import time
 from typing import Set, List
+
+import torch
 
 from config import Config, AudioTextPair
 from libs.audio import AudioPlayer, AudioProcessingError, TTSEngine
@@ -105,6 +108,13 @@ class Application:
 
     def create_play_thread(self):
         threading.Thread(target=self.play_phrases, daemon=True, name="PlayerThread").start()
+
+    @staticmethod
+    def empty_cache():
+        if torch.cuda.is_available():
+            logger.info("Emptying CUDA cache")
+            torch.cuda.empty_cache()
+            gc.collect()
 
     def shutdown(self):
         """Gracefully shutdown the application."""

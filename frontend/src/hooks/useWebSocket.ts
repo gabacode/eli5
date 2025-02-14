@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useGlobalState } from "../state/useGlobalState";
+import { ChunkMessage } from "../utils/types";
 
 interface IUseWs {
   wsRef: React.RefObject<WebSocket | null>;
@@ -77,30 +78,48 @@ export const useWebSocket = ({ wsRef }: IUseWs) => {
     };
   };
 
-  const sendMessage = async (message: object) => {
+  const sendMessage = async (message: ChunkMessage) => {
     try {
       await waitForWebSocket();
       if (!wsRef.current) throw new Error("WebSocket is not connected");
-
-      wsRef.current.send(JSON.stringify(message));
+      wsRef.current.send(
+        JSON.stringify({
+          ...message,
+          content: Array.from(new Uint8Array(message.content)),
+        })
+      );
     } catch (error) {
       console.error("WebSocket send error:", error);
       throw error;
     }
   };
 
+  /**
+   * Split the file into chunks and send them to the server
+   */
   const uploadFile = async (file: File) => {
+    const CHUNK_SIZE = 64 * 1024;
     try {
-      const content = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const base64String = e.target?.result as string;
-          resolve(base64String.split(",")[1]);
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+        const chunkBuffer = await chunk.arrayBuffer();
+
+        const message: ChunkMessage = {
+          type: "chunk",
+          filename: file.name,
+          contentType: file.type,
+          chunkIndex,
+          totalChunks,
+          content: chunkBuffer,
         };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      await sendMessage({ content });
+
+        await sendMessage(message);
+      }
+
       dispatch({ type: "SET_STATUS", status: "processing" });
     } catch (error) {
       console.error("Error handling file:", error);
