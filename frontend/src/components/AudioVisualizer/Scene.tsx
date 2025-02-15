@@ -50,12 +50,12 @@ export const Scene = ({
 
     uniforms.u_frequency.value = THREE.MathUtils.lerp(
       uniforms.u_frequency.value,
-      amplitudeRef.current > 0.1 ? amplitudeRef.current * 3 : 0,
-      0.1 // Smoothing factor
+      amplitudeRef.current > 0.1 ? amplitudeRef.current * 8 : 0,
+      0.08 // Smoothing factor
     );
     const scaleFactor = 1.0 + Math.sin(clock.getElapsedTime() * 0.618) * 0.05;
     meshRef.current.scale.setScalar(scaleFactor);
-    meshRef.current.rotation.y += 0.001;
+    meshRef.current.rotation.y = 1.57;
   });
 
   return (

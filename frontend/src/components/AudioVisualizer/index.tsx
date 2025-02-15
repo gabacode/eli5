@@ -5,6 +5,7 @@ import { AudioAnalyzer } from "./Analyzer";
 import vertexShader from "./shaders/vertexShader.glsl?raw";
 import fragmentShader from "./shaders/fragmentShader.glsl?raw";
 import { Scene } from "./Scene";
+import { EffectComposer, Vignette } from "@react-three/postprocessing";
 
 const CustomShaderMaterial = shaderMaterial(
   {
@@ -48,6 +49,9 @@ export const AudioVisualizer = ({
           colorEnd={colorEnd}
           multiplier={multiplier}
         />
+        <EffectComposer>
+          <Vignette eskil={false} offset={0.01} darkness={1} />
+        </EffectComposer>
         <OrbitControls enableDamping dampingFactor={0.05} />
       </Canvas>
     </div>
