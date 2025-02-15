@@ -54,6 +54,19 @@ const TTSWebSocket = () => {
     state.status,
   ]);
 
+  const saveMessages = useCallback(() => {
+    const messages = state.messages.map((msg) => msg.text);
+    const blob = new Blob([messages.join("\n")], {
+      type: "text/plain",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "messages.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [state.messages]);
+
   return (
     <div data-bs-theme="dark">
       <div className="container py-5">
@@ -89,6 +102,13 @@ const TTSWebSocket = () => {
                 )}
                 <StatusBar />
               </div>
+              {state.status === "completed" && (
+                <div className="card-footer text-center p-3">
+                  <button className="btn btn-success" onClick={saveMessages}>
+                    Save Messages
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
