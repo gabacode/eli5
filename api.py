@@ -83,6 +83,7 @@ class TTSTransmitter:
     def process_text(self, content: str):
         """Process the text content."""
         try:
+            self.app.empty_cache()
             sections_info: List[SectionInfo] = self.app.text_processor.split_into_sections(content, 250, 50)
             logger.info(f"Found {len(sections_info)} sections")
 
