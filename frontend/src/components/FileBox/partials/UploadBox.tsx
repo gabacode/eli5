@@ -15,6 +15,17 @@ export const UploadBox = ({ onFileChange }: UploadBoxProps) => {
     if (file) onFileChange(file);
   };
 
+  const pasteText = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const blob = new Blob([text], { type: "text/plain" });
+      const file = new File([blob], "clipboard.txt");
+      onFileChange(file);
+    } catch (error) {
+      console.error("Failed to read clipboard:", error);
+    }
+  };
+
   return (
     <div>
       <i className="bi bi-cloud-upload fs-1 text-primary mb-3 d-block"></i>
@@ -29,9 +40,23 @@ export const UploadBox = ({ onFileChange }: UploadBoxProps) => {
         onChange={handleFileInput}
         disabled={state.status === "processing"}
       />
-      <label htmlFor="fileInput" className={`btn btn-primary ${buttonClass}`}>
-        Choose File
-      </label>
+      <div>
+        <label htmlFor="fileInput" className={`btn btn-primary ${buttonClass}`}>
+          Choose File
+        </label>
+      </div>
+      <div className="small my-2">
+        <span>or</span>
+      </div>
+      <div>
+        <button
+          className="btn btn-primary"
+          onClick={pasteText}
+          disabled={state.status === "processing"}
+        >
+          Paste Text
+        </button>
+      </div>
     </div>
   );
 };

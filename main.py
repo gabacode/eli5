@@ -59,6 +59,7 @@ class Application:
                     logger.info("Shutdown event detected; stopping section processing")
                     break
                 if sentence and sentence not in self.processed_sentences:
+                    sentence = sentence.replace("*", "")
                     if self.audio_queue.put(sentence):
                         self.processed_sentences.add(sentence)
                         logger.debug(f"Enqueued new sentence for TTS: {sentence}")

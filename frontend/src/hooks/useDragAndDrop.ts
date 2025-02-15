@@ -1,21 +1,21 @@
 import { DragEvent, useState } from "react";
 
 interface IDragAndDrop {
+  setFile: (file: File) => void;
   onDropped: (file: File) => void;
 }
 
-export const useDragAndDrop = ({ onDropped }: IDragAndDrop) => {
-  const [file, setFile] = useState<File | null>(null);
+export const useDragAndDrop = ({ setFile, onDropped }: IDragAndDrop) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
 
-    const file = event.dataTransfer.files?.[0];
-    if (file) {
-      setFile(file);
-      onDropped(file);
+    const selected = event.dataTransfer.files?.[0];
+    if (selected) {
+      setFile(selected);
+      onDropped(selected);
     }
   };
 
@@ -32,7 +32,6 @@ export const useDragAndDrop = ({ onDropped }: IDragAndDrop) => {
   const onDragLeave = () => setIsDragging(false);
 
   return {
-    file,
     isDragging,
     onDrop,
     onDragOver,

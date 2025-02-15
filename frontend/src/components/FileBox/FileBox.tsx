@@ -1,15 +1,17 @@
+import { RefObject, useState } from "react";
 import { UploadBox } from "./partials/UploadBox";
 import { FilenameBox } from "./partials/FilenameBox";
 import { useWebSocket } from "../../hooks";
 import { useDragAndDrop } from "../../hooks/useDragAndDrop";
 
 interface FileBoxProps {
-  wsRef: React.RefObject<WebSocket | null>;
+  wsRef: RefObject<WebSocket | null>;
   onStart: () => void;
 }
 
 export const FileBox = ({ wsRef, onStart }: FileBoxProps) => {
   const { uploadFile } = useWebSocket({ wsRef });
+  const [file, setFile] = useState<File | null>(null);
 
   const onDropped = async (file: File) => {
     try {
@@ -20,8 +22,8 @@ export const FileBox = ({ wsRef, onStart }: FileBoxProps) => {
     }
   };
 
-  const { isDragging, onDrop, onDragOver, onDragEnter, onDragLeave, file } =
-    useDragAndDrop({ onDropped });
+  const { isDragging, onDrop, onDragOver, onDragEnter, onDragLeave } =
+    useDragAndDrop({ setFile, onDropped });
 
   return (
     <div
@@ -35,7 +37,12 @@ export const FileBox = ({ wsRef, onStart }: FileBoxProps) => {
       {file ? (
         <FilenameBox fileName={file.name} />
       ) : (
-        <UploadBox onFileChange={onDropped} />
+        <UploadBox
+          onFileChange={(selectedFile) => {
+            setFile(selectedFile);
+            onDropped(selectedFile);
+          }}
+        />
       )}
     </div>
   );
