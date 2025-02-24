@@ -71,7 +71,7 @@ const TTSWebSocket = () => {
     <div data-bs-theme="dark">
       <div className="container py-5">
         <div className="row justify-content-center">
-          <div className="col-md-8">
+          <div className="col-md-12">
             <div className="card shadow-sm">
               <div className="card-header bg-primary text-white">
                 <h5 className="card-title mb-0">ELI5 🙋</h5>

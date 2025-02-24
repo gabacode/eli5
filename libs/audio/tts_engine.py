@@ -8,23 +8,7 @@ from TTS.api import TTS
 
 from config import Config
 from libs.audio.audio_player import AudioProcessingError
-
-
-class torch_load_context:
-    """Context manager for temporarily modifying torch.load behavior."""
-
-    def __init__(self, weights_only: bool):
-        self.weights_only = weights_only
-        self.original_load = None
-
-    def __enter__(self):
-        self.original_load = torch.load
-        torch.load = lambda *args, **kwargs: self.original_load(
-            *args, **kwargs, weights_only=self.weights_only
-        )
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        torch.load = self.original_load
+from libs.utils.torch_context import torch_load_context
 
 
 class TTSEngine:
@@ -38,6 +22,8 @@ class TTSEngine:
 
     def initialize_tts(self):
         """Initialize the TTS engine."""
+        if self.tts is not None:
+            return
         device = "cuda" if torch.cuda.is_available() else "cpu"
         with torch_load_context(weights_only=False):
             try:

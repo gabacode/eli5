@@ -2,7 +2,9 @@ import asyncio
 import base64
 import io
 import json
+import signal
 import threading
+import time
 from pathlib import Path
 from queue import Empty
 from typing import Dict, List
@@ -23,8 +25,10 @@ class TTSTransmitter:
     def __init__(self, websocket, session_id: str):
         self.websocket = websocket
         self.session_id = session_id
-        self.shutdown_flag = threading.Event()
+        self.shutdown_event = threading.Event()
         self.app = None
+        self.monitor_thread = None
+        self.process_thread = None
 
     def start_tts_app(self):
         """Initialize and start the TTS application."""
@@ -59,9 +63,16 @@ class TTSTransmitter:
 
     def monitor_queue(self, event_loop):
         """Monitor the playback queue and schedule transmissions."""
-        while not self.shutdown_flag.is_set():
+        logger.info(f"Queue monitor thread started for session {self.session_id}")
+        while not self.shutdown_event.is_set():
             try:
-                audio_text_pair = self.app.playback_queue.get(timeout=0.5)
+                # Use a shorter timeout to check shutdown_event more frequently
+                audio_text_pair = self.app.playback_queue.get(timeout=0.2)
+
+                # Check shutdown_event again after getting item from queue
+                if self.shutdown_event.is_set():
+                    break
+
                 if audio_text_pair and audio_text_pair.audio_path.exists():
                     try:
                         future = asyncio.run_coroutine_threadsafe(
@@ -71,46 +82,77 @@ class TTSTransmitter:
                         future.result()
                     except websockets.exceptions.ConnectionClosed:
                         logger.error("WebSocket connection closed, stopping queue monitor")
-                        self.shutdown_flag.set()
+                        self.shutdown_event.set()
                         self.shutdown()
                         break
             except Empty:
                 continue
             except Exception as e:
                 logger.error(f"Error in queue monitoring: {e}")
-                continue
+                if not self.shutdown_event.is_set():
+                    continue
+                else:
+                    break
+
+        logger.info(f"Queue monitor thread exiting for session {self.session_id}")
 
     def process_text(self, content: str):
         """Process the text content."""
         try:
+            logger.info(f"Text processing thread started for session {self.session_id}")
             self.app.empty_cache()
             sections_info: List[SectionInfo] = self.app.text_processor.split_into_sections(content, 250, 50)
             logger.info(f"Found {len(sections_info)} sections")
 
             for i, section_info in enumerate(sections_info, 1):
+                if self.shutdown_event.is_set():
+                    logger.info(f"Shutdown event detected, stopping text processing for session {self.session_id}")
+                    break
+
                 section_text = section_info.section
                 subjects = section_info.subjects
 
                 logger.info(f"Processing section {i}/{len(sections_info)}")
                 logger.info(f"Subjects: {subjects}")
 
-                if self.shutdown_flag.is_set():
-                    break
-
                 last_section = self.app.text_processor.destop_words(sections_info[i - 2].section) if i > 1 else ""
                 self.app.process_section(last_section, section_text)
 
             # Empty memory here
+            logger.info("Finished processing text")
             self.app.empty_cache()
 
         except Exception as e:
             logger.error(f"Error processing text: {e}")
+        finally:
+            logger.info(f"Text processing thread exiting for session {self.session_id}")
 
     def shutdown(self):
         """Shutdown the transmitter and cleanup resources."""
-        self.shutdown_flag.set()
+        logger.info(f"Shutting down transmitter for session {self.session_id}")
+        self.shutdown_event.set()
+
         if self.app:
+            # Give pending tasks a chance to complete
+            timeout = 5  # seconds
+            start_time = time.time()
+            while not self.app.playback_queue.empty() and time.time() - start_time < timeout:
+                time.sleep(0.1)
+
             self.app.shutdown()
+
+        # Wait for threads to exit with timeout
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            self.monitor_thread.join(timeout=2)
+            if self.monitor_thread.is_alive():
+                logger.warning(f"Monitor thread for session {self.session_id} did not exit cleanly")
+
+        if self.process_thread and self.process_thread.is_alive():
+            self.process_thread.join(timeout=2)
+            if self.process_thread.is_alive():
+                logger.warning(f"Process thread for session {self.session_id} did not exit cleanly")
+
+        logger.info(f"Transmitter for session {self.session_id} shut down")
 
 
 class TTSServer:
@@ -121,6 +163,8 @@ class TTSServer:
         self.port = port
         self.transmitters: Dict[str, TTSTransmitter] = {}
         self.chunks = {}
+        self.server = None
+        self.shutdown_future = None
 
     async def handle_upload(self, websocket, content: bytes, session_id: str):
         """Handle file upload and start processing."""
@@ -156,22 +200,22 @@ class TTSServer:
             transmitter.start_tts_app()
 
             # Start queue monitoring in a separate thread
-            monitor_thread = threading.Thread(
+            transmitter.monitor_thread = threading.Thread(
                 target=transmitter.monitor_queue,
                 args=(asyncio.get_event_loop(),),
                 daemon=True,
                 name=f"QueueMonitor-{session_id}"
             )
-            monitor_thread.start()
+            transmitter.monitor_thread.start()
 
             # Process the text in a separate thread
-            process_thread = threading.Thread(
+            transmitter.process_thread = threading.Thread(
                 target=transmitter.process_text,
                 args=(content,),
                 daemon=True,
                 name=f"TextProcessor-{session_id}"
             )
-            process_thread.start()
+            transmitter.process_thread.start()
 
         except Exception as e:
             logger.error(f"Error processing text: {e}")
@@ -183,6 +227,7 @@ class TTSServer:
     async def cleanup_session(self, session_id: str):
         """Cleanup session resources."""
         if session_id in self.transmitters:
+            logger.info(f"Cleaning up session: {session_id}")
             transmitter = self.transmitters[session_id]
             transmitter.shutdown()
             del self.transmitters[session_id]
@@ -191,12 +236,21 @@ class TTSServer:
             cache_dir = Path(f"audio_cache_{session_id}")
             if cache_dir.exists():
                 for file in cache_dir.glob("*"):
-                    file.unlink()
-                cache_dir.rmdir()
+                    try:
+                        file.unlink()
+                    except Exception as e:
+                        logger.error(f"Error deleting file {file}: {e}")
+                try:
+                    cache_dir.rmdir()
+                except Exception as e:
+                    logger.error(f"Error removing directory {cache_dir}: {e}")
+
+            logger.info(f"Session {session_id} cleaned up")
 
     async def handle_connection(self, websocket):
         """Handle incoming WebSocket upload requests."""
         session_id = str(hash(websocket))
+        logger.info(f"New client connected: {session_id}")
         try:
             async for message in websocket:
                 try:
@@ -233,13 +287,52 @@ class TTSServer:
                 'content': str(e)
             }))
 
+    async def shutdown_all_sessions(self):
+        """Shut down all active transmitter sessions."""
+        logger.info(f"Shutting down all sessions ({len(self.transmitters)} active)")
+        shutdown_tasks = []
+        for session_id in list(self.transmitters.keys()):
+            shutdown_tasks.append(self.cleanup_session(session_id))
+
+        if shutdown_tasks:
+            await asyncio.gather(*shutdown_tasks)
+        logger.info("All sessions shut down")
+
     async def start(self):
         """Start the WebSocket server."""
-        async with websockets.serve(self.handle_connection, self.host, self.port):
-            logger.info(f"TTS Server running at ws://{self.host}:{self.port}")
-            await asyncio.Future()  # run forever
+        self.server = await websockets.serve(self.handle_connection, self.host, self.port) # type: ignore
+        logger.info(f"TTS Server running at ws://{self.host}:{self.port}")
+
+        self.shutdown_future = asyncio.Future()
+        await self.shutdown_future
+        await self.shutdown_all_sessions()
+
+        self.server.close()
+        await self.server.wait_closed()
+        logger.info("WebSocket server closed")
 
 
 if __name__ == "__main__":
     server = TTSServer()
-    asyncio.run(server.start())
+    loop = asyncio.get_event_loop()
+
+    def signal_handler():
+        logger.info("Received shutdown signal, initiating graceful shutdown...")
+        if server.shutdown_future and not server.shutdown_future.done():
+            server.shutdown_future.set_result(None)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda: signal_handler()) # type: ignore
+    try:
+        loop.run_until_complete(server.start())
+    except Exception as e:
+        logger.error(f"Error in main loop: {e}")
+    finally:
+        pending = asyncio.all_tasks(loop)
+        for task in pending:
+            task.cancel()
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+
+        loop.close()
+        logger.info("Server has shut down completely")

@@ -17,6 +17,7 @@ declare module "@react-three/fiber" {
     > & {
       wireframe?: boolean;
       transparent?: boolean;
+      wireframeLinewidth?: number;
       "uniforms-u_time-value"?: number;
       "uniforms-u_frequency-value"?: number;
       "uniforms-u_color-value"?: Color;
